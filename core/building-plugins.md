@@ -712,7 +712,27 @@ plugin my-plugin requires plugin "send-email" which is not installed or enabled
 ```
 
 **Important:** The `requires.plugins` field is an enforced contract, not documentation.
-If your plugin needs tools from another plugin, declare it here and it will be checked.
+
+Dependencies work at two levels:
+
+1. **Install time** — when you install a plugin, missing dependencies are
+   automatically installed from the same configured sources. Transitive
+   dependencies are resolved recursively. Auto-installed plugins are NOT
+   auto-enabled — the user must configure and enable them.
+
+2. **Startup time** — when the agent starts, all `requires.plugins` are
+   checked against the set of enabled plugins. A missing or disabled
+   dependency is a fatal error.
+
+Example install output with auto-resolved dependencies:
+
+```
+installed  my-ops-dashboard@0.1.0  (source: official)
+  dep  grafana-alerts@0.1.0  (auto-installed, source: official)
+  dep  send-email@0.1.0      (auto-installed, source: official)
+
+2 dependency(ies) installed. Run 'plugins config' and 'plugins enable' for each.
+```
 
 ---
 

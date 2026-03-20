@@ -190,16 +190,44 @@ spec:
     framework: ">=0.1.0"
     plugins:
       - send-email     # this plugin requires send-email to be installed and enabled
+      - ddg-research   # transitive deps are also resolved
 ```
 
-Dependencies are enforced at plugin registration time — when the agent starts up.
-If a required plugin is not installed or not enabled, the agent reports an error:
+### Automatic dependency installation
+
+When you install a plugin, the framework checks its `requires.plugins` and
+automatically installs any missing dependencies from the same configured sources:
+
+```bash
+agent plugins install my-ops-dashboard
+```
 
 ```
-plugin my-plugin requires plugin "send-email" which is not installed or enabled
+installed  my-ops-dashboard@0.1.0  (source: official)  ~/.agent/plugins/my-ops-dashboard
+  dep  grafana-alerts@0.1.0  (auto-installed, source: official)
+  dep  send-email@0.1.0      (auto-installed, source: official)
+
+2 dependency(ies) installed. Run 'plugins config' and 'plugins enable' for each before use.
 ```
 
-Fix: install and enable the dependency first.
+**Dependencies are installed but NOT enabled.** You must configure and enable
+each dependency manually — this is intentional because dependencies often
+require config (API keys, URLs) that only you can provide.
+
+Transitive dependencies are resolved recursively. If plugin A requires B,
+and B requires C, installing A will also install B and C.
+Circular dependencies are detected and skipped.
+
+### Runtime enforcement
+
+Dependencies are also checked when the agent starts up. If a required plugin
+is installed but not enabled, registration fails:
+
+```
+plugin my-ops-dashboard requires plugin "send-email" which is not installed or enabled
+```
+
+Fix: enable the dependency with `agent plugins enable send-email`.
 
 ---
 
