@@ -12,14 +12,15 @@ clean separation of concerns, and complex multi-step workflows.
 
 ```
 Orchestrator agent
+    └── agent/discover → finds: researcher, grafana-researcher, ...
     └── agent/spawn → researcher sub-agent #1
-    │       └── ddg/search "OpenAI news"
-    │       └── ddg/fetch  (articles)
+    │       ├── [sub:researcher] ddg/search "OpenAI news"
+    │       ├── [sub:researcher] ddg/fetch  (articles)
     │       └── Returns: structured summary
     │
     └── agent/spawn → researcher sub-agent #2
-    │       └── ddg/search "Anthropic news"
-    │       └── ddg/fetch  (articles)
+    │       ├── [sub:researcher] ddg/search "Anthropic news"
+    │       ├── [sub:researcher] ddg/fetch  (articles)
     │       └── Returns: structured summary
     │
     └── email/send
@@ -27,7 +28,109 @@ Orchestrator agent
             └── Delivers to recipient
 ```
 
-The orchestrator never touches the web. It only coordinates and delivers.
+The orchestrator discovers available agents dynamically, delegates research,
+and sees sub-agent progress in real time via `[sub:profile]` prefixed events.
+
+---
+
+## Agent discovery
+
+Instead of hard-coding profile names in the system prompt, the orchestrator
+calls `agent/discover` first to find what agents are available:
+
+```
+[tool request] agent/discover
+[tool finished] Available agents: 5
+  researcher (v0.1.0) — web search and summarization
+    capabilities: web-search, content-extraction, summarization
+    accepts: A topic or question to research
+    returns: Structured summary with titles, URLs, and key findings
+
+  grafana-researcher (v0.1.0) — Grafana alerts, metrics, and logs
+    capabilities: grafana-alerts, prometheus-query, loki-logs
+    accepts: A team name and time range
+    returns: Structured alert and metric summary
+```
+
+The orchestrator reads the capabilities and decides which agents to delegate to
+based on the user's request. This means the orchestrator adapts automatically
+when new agent profiles are installed.
+
+### General-purpose orchestrator profile
+
+```yaml
+metadata:
+  name: orchestrator
+  description: General-purpose orchestrator that discovers and delegates
+spec:
+  instructions:
+    system:
+      - |
+        1. ALWAYS call agent/discover first to see what agents are available
+        2. Match agent capabilities to the task requirements
+        3. Use agent/spawn or agent/spawn-parallel to delegate
+        4. Combine results and deliver
+  tools:
+    enabled:
+      - agent/discover
+      - agent/spawn
+      - agent/spawn-parallel
+      - email/send
+```
+
+---
+
+## Structured handoff
+
+When spawning a sub-agent, pass structured context alongside the task:
+
+```json
+{
+  "task": "Research Anthropic news from this week",
+  "profile": "researcher",
+  "maxTurns": 8,
+  "context": {
+    "date": "2026-03-20",
+    "constraints": ["Only sources from March 13-20"],
+    "output_format": "structured-summary",
+    "prior_results": ["OpenAI section already completed"]
+  }
+}
+```
+
+The framework prepends the context as a labeled block before the task:
+
+```
+[Context from parent agent]
+date: 2026-03-20
+constraints: Only sources from March 13-20
+output_format: structured-summary
+prior_results: OpenAI section already completed
+
+Research Anthropic news from this week
+```
+
+This enables chained workflows where each sub-agent receives relevant context
+from earlier steps without the orchestrator pasting raw text into the task string.
+
+---
+
+## Sub-agent progress visibility
+
+Sub-agent tool calls are forwarded to the parent's output with a prefix:
+
+```
+[tool request] agent/spawn
+[approval] auto-approved
+[tool request] [sub:researcher] → ddg/search
+[tool finished] [sub:researcher] → Search results for "Anthropic"...
+[tool request] [sub:researcher] → ddg/fetch
+[tool finished] [sub:researcher] → DOD says Anthropic's 'red lines'...
+[tool finished] **Topic:** Anthropic  **Key stories:** ...
+```
+
+This means you can see exactly what sub-agents are doing in real time instead
+of waiting silently for 30-60 seconds.
 Each sub-agent runs in complete isolation with its own tool set and turn limit.
 
 ---

@@ -14,6 +14,66 @@ Related docs:
 
 ---
 
+## Discovery metadata
+
+Profiles can declare discovery metadata so orchestrator agents can find and
+select them dynamically using the `agent/discover` tool:
+
+```yaml
+metadata:
+  name: researcher
+  capabilities:              # what this agent can do
+    - web-search
+    - content-extraction
+    - summarization
+  accepts: A topic or question to research
+  returns: Structured summary with titles, URLs, and key findings
+```
+
+| Field | Purpose |
+|---|---|
+| `capabilities` | Tags describing what the agent can do — used for matching tasks to agents |
+| `accepts` | Human-readable description of expected input |
+| `returns` | Human-readable description of what output to expect |
+
+An orchestrator calls `agent/discover` to list all available agents with their
+metadata, then decides which to delegate to based on capabilities and the
+user's request. This replaces hard-coding profile names in system prompts.
+
+---
+
+## MCP server mode
+
+Any profile can be exposed as an MCP tool for external clients:
+
+```bash
+agent serve --profile researcher
+```
+
+This starts an MCP server over stdio that wraps the agent as a single callable
+tool. External clients (Claude Desktop, Cursor, opencode) see the profile
+as a tool with the profile's name and description.
+
+Configuration for opencode (`~/.config/opencode/config.json`):
+
+```json
+{
+  "mcp": {
+    "researcher": {
+      "type": "local",
+      "command": ["agent", "serve", "--profile", "researcher"],
+      "timeout": 120000
+    }
+  }
+}
+```
+
+The agent runs its full tool chain internally (searches, fetches, model turns)
+and returns the final output as the MCP tool result. Keepalive notifications
+are sent every 5 seconds to prevent client timeouts during long-running tasks.
+
+---
+
 ## Profile discovery
 
 The agent looks for profiles in two locations, in this order:
@@ -37,6 +97,11 @@ metadata:
   name: my-agent          # identifier used with --profile
   version: 0.1.0
   description: What this agent does
+  capabilities:           # discoverable capability tags (used by agent/discover)
+    - web-search
+    - summarization
+  accepts: A topic or question to research       # what input this agent expects
+  returns: Structured summary with key findings  # what output this agent produces
 
 spec:
   instructions:
