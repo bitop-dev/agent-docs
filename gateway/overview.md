@@ -1,18 +1,8 @@
 # Gateway
 
-The agent gateway is the single entry point for the distributed agent platform.
-It accepts tasks, routes them to workers, retries on failures, stores results
-in PostgreSQL, and provides auth, webhooks, scheduling, and a web dashboard.
-
-## Architecture
-
-```
-External clients → Gateway → Workers (distributed across k8s pods)
-                      ↕           ↕
-                 PostgreSQL    Registry (profiles + plugins)
-                      ↕
-                    NATS (real-time events)
-```
+The single entry point for the distributed agent platform. Routes tasks to workers,
+handles auth, webhooks, scheduling, cost tracking, agent memory, and serves a
+web dashboard.
 
 ## Endpoints
 
@@ -20,193 +10,149 @@ External clients → Gateway → Workers (distributed across k8s pods)
 
 | Endpoint | Method | Auth | Description |
 |---|---|---|---|
-| `/v1/tasks` | POST | `tasks:write` | Submit a task (sync or async) |
+| `/v1/tasks` | POST | `tasks:write` | Submit task (sync or `"async":true`) |
 | `/v1/tasks` | GET | `tasks:read` | List tasks (`?status=`, `?limit=`) |
-| `/v1/tasks/{id}` | GET | `tasks:read` | Get task details + result |
-| `/v1/tasks/parallel` | POST | `tasks:write` | Submit multiple tasks for parallel execution |
+| `/v1/tasks/{id}` | GET | `tasks:read` | Task details + result |
+| `/v1/tasks/parallel` | POST | `tasks:write` | Multiple tasks across workers concurrently |
 
-#### Single task
-
-```json
-POST /v1/tasks
-{"profile": "researcher", "task": "Research Anthropic news"}
-→ {"id": "task-abc", "status": "completed", "output": "...", "durationMs": 12000}
-```
-
-#### Async task
-
-```json
-POST /v1/tasks
-{"profile": "researcher", "task": "...", "async": true}
-→ {"id": "task-abc", "status": "queued"}
-
-GET /v1/tasks/task-abc  (poll until completed)
-→ {"id": "task-abc", "status": "completed", "output": "..."}
-```
-
-#### Parallel tasks (distributed across workers)
-
-Submits multiple tasks and dispatches each to a different worker concurrently.
-Total wall time equals the slowest task, not the sum.
-
+#### Parallel execution
 ```json
 POST /v1/tasks/parallel
-{
-  "tasks": [
-    {"profile": "researcher", "task": "Anthropic news"},
-    {"profile": "researcher", "task": "OpenAI news"},
-    {"profile": "researcher", "task": "Google AI news"}
-  ]
-}
-→ {"count": 3, "tasks": [{...}, {...}, {...}]}
+{"tasks": [
+  {"profile":"researcher","task":"Anthropic news"},
+  {"profile":"researcher","task":"OpenAI news"}
+]}
 ```
-
-Each task is routed to a different worker. With 5 workers and 3 tasks,
-3 different pods handle the work concurrently.
-
-### Retries
-
-The gateway automatically retries failed tasks on transient errors:
-- Timeouts, connection refused, EOF, 502/503/504
-- Up to 2 retries (configurable)
-- Each retry picks a different worker if available
-- Exponential backoff (2s × attempt) between retries
-- Permanent errors (auth failures, missing tools) are not retried
+Each task dispatched to a different worker. Wall time = slowest task.
 
 ### Workers
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/v1/workers` | POST | Register/heartbeat |
+| `/v1/workers` | POST | Register/heartbeat (no auth — workers self-register) |
 | `/v1/workers` | GET | List workers |
 | `/v1/workers` | DELETE | Deregister (`?url=`) |
 
-Workers heartbeat every 5 minutes. Stale workers (no heartbeat for 15 min)
-are marked inactive and excluded from routing.
+Workers register with pod IPs at startup (`GATEWAY_URL` env) and heartbeat every 5 minutes.
+Dead workers are evicted immediately on connection failure — no 15-minute wait.
 
 ### Auth
 
-| Endpoint | Method | Auth | Description |
-|---|---|---|---|
-| `/v1/auth/keys` | POST | `admin` | Create API key |
-| `/v1/auth/keys` | GET | `admin` | List keys |
-| `/v1/auth/keys` | DELETE | `admin` | Revoke (`?id=`) |
+| Endpoint | Method | Auth |
+|---|---|---|
+| `/v1/auth/keys` | POST/GET/DELETE | `admin` |
 
-Three auth levels:
-1. **Admin key** — `--admin-key` flag or `ADMIN_KEY` env. Full access.
-2. **API keys** — scoped to `tasks:write`, `tasks:read`, or `admin`
-3. **Webhook tokens** — per-webhook auth for external triggers
+Scopes: `tasks:write`, `tasks:read`, `admin`. Admin key via `--admin-key` or `ADMIN_KEY`.
 
 ### Webhooks
 
-| Endpoint | Method | Auth | Description |
-|---|---|---|---|
-| `/v1/webhooks` | POST | `admin` | Create webhook config |
-| `/v1/webhooks` | GET | `admin` | List webhooks |
-| `/v1/webhooks/{path}` | POST | webhook token | Trigger |
+| Endpoint | Method | Auth |
+|---|---|---|
+| `/v1/webhooks` | POST/GET/DELETE | `admin` |
+| `/v1/webhooks/{path}` | POST | per-webhook token |
 
-Template expansion with `{{key}}` and `{{nested.key}}`:
+Template expansion: `{{key}}` and `{{nested.key}}` from payload.
 
 ```json
 POST /v1/webhooks
-{
-  "name": "grafana-alerts",
-  "path": "grafana",
-  "profile": "grafana-researcher",
-  "taskTemplate": "Alert: {{alertname}} on {{labels.host}}. Investigate.",
-  "contextTemplate": {"team": "{{labels.team}}"},
-  "authToken": "grafana-secret"
-}
-
-// Trigger from Grafana:
-POST /v1/webhooks/grafana
-Authorization: Bearer grafana-secret
-{"alertname": "High CPU", "labels": {"host": "prod-01", "team": "ops"}}
-→ {"taskId": "task-xyz", "status": "queued"}
+{"name":"grafana","path":"grafana","profile":"alert-monitor",
+ "taskTemplate":"Alert {{alertname}} on {{labels.host}}",
+ "authToken":"secret"}
 ```
 
 ### Schedules
 
-| Endpoint | Method | Auth | Description |
-|---|---|---|---|
-| `/v1/schedules` | POST | `admin` | Create schedule |
-| `/v1/schedules` | GET | `admin` | List schedules |
-| `/v1/schedules` | DELETE | `admin` | Delete (`?id=`) |
+| Endpoint | Method | Auth |
+|---|---|---|
+| `/v1/schedules` | POST/GET/DELETE | `admin` |
 
 ```json
-POST /v1/schedules
-{
-  "name": "daily-ops",
-  "cron": "0 8 * * *",
-  "timezone": "America/New_York",
-  "profile": "grafana-alert-summary",
-  "task": "Daily ops report for ict-aipe"
-}
+{"name":"daily-ops","cron":"0 8 * * *","timezone":"America/New_York",
+ "profile":"grafana-alert-summary","task":"Daily ops report"}
 ```
 
-### Discovery and events
+### Memory
 
 | Endpoint | Method | Auth | Description |
 |---|---|---|---|
+| `/v1/memory?profile=X` | POST | `tasks:write` | Store key-value |
+| `/v1/memory?profile=X` | GET | `tasks:read` | Recall all or `&key=Y` |
+| `/v1/memory?profile=X` | DELETE | `tasks:write` | Forget all or `&key=Y` |
+
+Per-profile persistent knowledge in PostgreSQL. Agents use `agent/remember`
+and `agent/recall` tools which call this API via `GATEWAY_URL`.
+
+### Costs
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| `/v1/costs` | GET | `tasks:read` | Cost summary by profile (`?since=2026-01-01`) |
+| `/v1/costs/pricing` | GET | `admin` | View model pricing table |
+| `/v1/costs/pricing` | POST | `admin` | Set per-model pricing |
+
+Pricing synced from [models.dev](https://models.dev) at startup (1800+ models,
+USD per million tokens). Admin can override any model's pricing.
+
+Token usage flows: LLM response → provider → runner → worker HTTP response →
+gateway → `cost_tracking` table → `GET /v1/costs`.
+
+### Events and dashboard
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| `/v1/events` | GET | `tasks:read` | SSE event stream |
 | `/v1/agents` | GET | `tasks:read` | Available agents (workers + registry) |
-| `/v1/events` | GET | `tasks:read` | SSE event stream (real-time) |
 | `/v1/health` | GET | none | Health check |
+| `/` | GET | none | Web dashboard |
 
-### Web dashboard
+NATS events published: `agent.task.submitted`, `agent.task.started`,
+`agent.task.completed`, `agent.task.failed`, `agent.task.retry`,
+`agent.worker.joined`, `agent.webhook.fired`.
 
-The gateway serves an embedded web dashboard at `/`. Connect with an API key
-to see:
-- Worker status and count
-- Task history with status, duration, profile
-- Agent discovery
-- Live event feed
+## Routing
 
-## Task routing
+1. Find idle worker with profile installed
+2. Fall back to any idle worker (on-demand install handles it)
+3. If worker unreachable → evict immediately, retry on different worker
+4. Up to 2 retries on transient errors (timeouts, 502/503)
+5. Permanent errors (auth, invalid model) fail immediately
 
-When a task arrives:
-1. Find idle workers with the profile installed
-2. Fall back to any idle worker (on-demand install handles the rest)
-3. Prefer workers with fewer completed tasks (load balance)
-4. If no worker available, retry with backoff
-5. Store result in PostgreSQL on completion
+## Reactive triggers
 
-## Distributed parallel execution
+Service-mode profiles register their triggers as webhooks at worker startup:
 
-Workers set `GATEWAY_URL=http://agent-gateway:8080` to enable gateway-distributed
-parallelism. When `agent/spawn-parallel` is called by an orchestrator:
-- Without GATEWAY_URL: goroutines in one worker (serializes on LLM API)
-- With GATEWAY_URL: dispatched through `/v1/tasks/parallel` across pods
+```yaml
+# profile with mode: service
+spec:
+  mode: service
+  triggers:
+    - event: agent.alert.fired
+      taskTemplate: "Alert {{alertname}}. Investigate."
+```
 
-This means an orchestrator running on Worker A can dispatch sub-tasks to
-Workers B, C, D concurrently for true parallel execution.
+Worker starts → discovers service-mode profiles → registers webhook on gateway →
+external system fires event → gateway creates task → worker executes agent.
 
 ## Configuration
 
 ```
---addr          Listen address (default :8080)
---dsn           PostgreSQL connection string (or DATABASE_URL env)
---nats          NATS URL (or NATS_URL env, optional)
---registry      agent-registry URL for profile discovery
---admin-key     Admin API key (or ADMIN_KEY env)
+--addr          :8080
+--dsn           postgres://... (or DATABASE_URL)
+--nats          nats://... (or NATS_URL, optional)
+--registry      http://registry:9080
+--admin-key     ... (or ADMIN_KEY)
 ```
 
-## NATS events
+## PostgreSQL tables
 
-When NATS is configured, the gateway publishes events:
-- `agent.task.submitted` / `started` / `completed` / `failed` / `retry`
-- `agent.worker.joined` / `lost`
-- `agent.webhook.fired`
-- `agent.schedule.fired`
+`tasks`, `workers`, `api_keys`, `schedules`, `webhooks`, `agent_memory`,
+`cost_tracking`, `audit_log`
 
-Subscribe to `agent.>` for all events.
+Auto-migrated on startup.
 
-## Deployment
+## Docker
 
 ```bash
-# Docker
-docker run -p 8080:8080 ghcr.io/bitop-dev/agent-gateway:0.3.2 \
+docker run -p 8080:8080 ghcr.io/bitop-dev/agent-gateway:0.4.4 \
   --dsn "postgres://..." --nats "nats://nats:4222" --admin-key "..."
-
-# k8s (6 pods total)
-# gateway (1) + workers (N) + registry (1) + postgres (1) + nats (1)
 ```

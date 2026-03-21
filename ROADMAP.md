@@ -1,69 +1,51 @@
-# Roadmap — agent-docs
+# Roadmap
 
-## Current state
+## Completed
 
-All project documentation lives here, organized under `core/`, `registry/`, and `plugins/`. The docs cover the agent framework, plugin authoring, registry server, and design patterns.
+| Feature | Version | Status |
+|---|---|---|
+| Core framework | v0.1.0 | ✅ |
+| Plugin system (install, upgrade, publish, deps) | v0.3.0 | ✅ |
+| Profile system (discovery, on-demand, registry) | v0.3.6 | ✅ |
+| On-demand plugin + profile install | v0.3.6 | ✅ |
+| HTTP workers (dynamic, blank, self-bootstrapping) | v0.3.0 | ✅ |
+| MCP server mode | v0.3.0 | ✅ |
+| Agent discovery (local + registry) | v0.3.0 | ✅ |
+| Structured handoff (context) | v0.3.0 | ✅ |
+| Pipelines + checkpoints | v0.3.0 | ✅ |
+| Sequential + parallel sub-agents | v0.3.0 | ✅ |
+| Gateway (routing, auth, webhooks, scheduling) | gw v0.1.0 | ✅ |
+| Gateway parallel dispatch | gw v0.3.1 | ✅ |
+| Gateway retries + dead worker eviction | gw v0.4.4 | ✅ |
+| NATS event bus + SSE stream | gw v0.2.0 | ✅ |
+| Web dashboard | gw v0.3.0 | ✅ |
+| Task history (PostgreSQL) | gw v0.1.0 | ✅ |
+| Cost tracking (models.dev, 1800+ models) | gw v0.4.0 | ✅ |
+| Agent memory (agent/remember, agent/recall) | v0.4.0 | ✅ |
+| Model fallback chain | v0.4.5 | ✅ |
+| Plugin config from env | v0.4.0 | ✅ |
+| Profile inheritance | v0.4.0 | ✅ |
+| Anthropic native provider | v0.4.0 | ✅ |
+| Reactive triggers (service mode) | v0.4.3 | ✅ |
+| Worker auto-registration (pod IPs) | v0.4.1 | ✅ |
+| Session compaction (pi-mono style) | v0.3.0 | ✅ |
+| Tool name sanitization | v0.3.0 | ✅ |
+| CI/CD + Docker images + k8s deployment | v0.3.0 | ✅ |
 
----
+## Remaining
 
-## Near term
+### Enhanced dashboard
+- Task detail view with output, tool call trace, timing
+- Submit tasks from the UI
+- Real-time SSE event feed (currently polling)
+- Cost charts by profile and model
+- Plugin and profile management
 
-### Keep docs in sync with code
+### Marketplace
+- Public registry at registry.bitop.dev
+- Community plugin and profile contributions
+- Rating, downloads, verified publishers
 
-As features land in `agent`, `agent-registry`, and `agent-plugins`, update the relevant docs here in the same PR or immediately after. The highest priority gaps right now:
-
-- `core/plugins.md` — document remote search, install, upgrade, and publish workflows added in v0.2.0
-- `core/profiles.md` — document `profiles install` command added in v0.2.0
-- New `core/session-compaction.md` — document the session compaction feature
-- New `core/envMapping.md` — document plugin config to env var mapping
-
-### Per-plugin docs in `plugins/`
-
-Each plugin in `agent-plugins` deserves its own page:
-
-```
-plugins/
-  core-tools.md
-  ddg-research.md
-  grafana-alerts.md
-  grafana-mcp.md
-  github-cli.md
-  kubectl.md
-  slack.md
-  send-email.md
-  web-research.md
-  ...
-```
-
-Each page should cover prerequisites, config schema, available tools, and example profile snippets.
-
----
-
-## Medium term
-
-### CLI reference page
-A complete CLI command reference: every command, subcommand, and flag. Auto-generated from source or maintained manually.
-
-### Profile cookbook
-A collection of ready-to-use profiles for common tasks:
-- research-and-email
-- ops-summary (Grafana + Slack)
-- coding assistant
-- orchestrator with parallel sub-agents
-
-### Architecture diagram
-A visual diagram of how the four repos relate to each other at runtime:
-- `agent` CLI → `agent-registry` for search/install
-- `agent` CLI → plugin runtimes (http, mcp, command, host)
-- `agent-registry` ← `agent-plugins` as package source
-- `agent-plugins` → `agent` for local installs
-
----
-
-## Long term
-
-### Versioned docs
-When the framework reaches v1.0, version the docs so users on older releases can find accurate information.
-
-### Searchable doc site
-Deploy the docs as a static site (e.g. with [mdBook](https://rust-lang.github.io/mdBook/) or a similar tool) with full-text search. The current GitHub-browsable Markdown works but doesn't scale well.
+### Notes
+- Cost tracking shows $0 for self-hosted models (UFL proxy doesn't return usage tokens) — revisit when using direct API keys
+- Multi-arch plugin builds (CI for linux/amd64 + darwin/arm64) deferred until plugins are rebuilt as official packages

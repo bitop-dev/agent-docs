@@ -650,6 +650,35 @@ spec:
 
 ---
 
+## Config from environment (auto-populate)
+
+Plugins can declare `envVar` and `default` on config properties so users
+don't need to run `plugins config set` manually:
+
+```yaml
+configSchema:
+  properties:
+    apiEndpoint:
+      type: string
+      default: "https://api.example.com"   # used if not set by user or env
+    secretKey:
+      type: string
+      envVar: MY_SECRET_KEY                # read from this env var at startup
+      secret: true
+    region:
+      type: string
+      default: "us-east-1"
+```
+
+The framework auto-populates at startup in this order:
+1. `Property.EnvVar` — reads the named environment variable
+2. Convention: `AGENT_PLUGIN_<PLUGINNAME>_<KEY>` (all uppercase)
+3. `Property.Default` — fallback default value
+
+In k8s, just set env vars on worker pods — no `plugins config set` needed.
+
+---
+
 ## Environment variable mapping (envMapping)
 
 For MCP and command plugins that need to pass config values to subprocess
