@@ -621,6 +621,43 @@ spec:
 This runs all three searches concurrently — total time is the duration of the
 slowest sub-agent, not the sum of all three.
 
+### Gateway-level parallel (distributed across k8s pods)
+
+In-process `agent/spawn-parallel` runs goroutines in one worker, which
+serializes on the LLM API. For true parallelism across k8s pods, use
+the gateway's parallel endpoint:
+
+```bash
+curl -X POST http://gateway:8080/v1/tasks/parallel \
+  -H "Authorization: Bearer <key>" \
+  -d '{
+    "tasks": [
+      {"profile":"researcher","task":"Anthropic news"},
+      {"profile":"researcher","task":"OpenAI news"},
+      {"profile":"researcher","task":"Google AI news"}
+    ]
+  }'
+```
+
+Each task is dispatched to a different worker pod. Wall time = slowest task.
+
+Workers with `GATEWAY_URL` set automatically route `agent/spawn-parallel`
+through the gateway, so orchestrators get true distribution without
+changing their prompts:
+
+```bash
+# k8s worker env
+GATEWAY_URL=http://agent-gateway:8080
+```
+
+### Automatic retries
+
+The gateway retries failed tasks on transient errors (timeouts, connection
+refused, 502/503/504) up to 2 times:
+- Each retry picks a different worker
+- Exponential backoff between retries
+- Permanent errors (auth, missing tools) are not retried
+
 ---
 
 ## Session compaction

@@ -1,63 +1,58 @@
-# Changelog — agent-docs
+# Changelog
 
-All notable changes to the documentation.
+## Agent v0.3.6
+- Gateway-distributed parallel: `SpawnSubRunParallel` dispatches through gateway when `GATEWAY_URL` is set
+- On-demand profile install from registry
+- On-demand plugin install with config validation
+- Registry-aware agent discovery (local + remote profiles)
+- Sub-agent progress visibility (`[sub:profile]` prefix)
+- MCP server keepalive notifications
+- Better error reporting (show both local and registry errors)
 
----
+## Agent v0.3.0
+- Agent discovery (`agent/discover` tool)
+- Structured handoff (`context` parameter on spawn/pipeline)
+- Agent pipelines (`agent/pipeline` with `{{var}}` routing)
+- Pipeline checkpoints
+- MCP server mode (`agent serve --profile`)
+- HTTP worker mode (`agent serve --addr :9898`)
+- Worker-to-worker HTTP dispatch
+- Worker registration with registry
+- Message bus for agent-to-agent communication
+- Parallel sub-agents (`agent/spawn-parallel`)
+- Session compaction (pi-mono style)
+- Transitive plugin dependency auto-install
+- Version pinning (`name@version` syntax)
+- Plugin upgrade and publish commands
+- Tool name sanitization for Bedrock/Azure
 
-## Unreleased
+## Gateway v0.3.2
+- Parallel task dispatch: `POST /v1/tasks/parallel` across workers
+- Automatic retry on transient failures (timeouts, 502s)
+- NATS event bus integration
+- SSE event stream endpoint
+- Embedded web dashboard
 
----
+## Gateway v0.1.0
+- Task routing and worker management
+- API key auth with scopes
+- Webhooks with template expansion
+- Cron-based scheduling
+- PostgreSQL state store
 
-## v0.2.0
+## Registry v0.2.4
+- Profile package support (publish, index, serve)
+- Worker registration endpoints (moved to gateway in v0.3+)
+- `--base-url` flag for k8s artifact URLs
+- Empty plugin-root graceful handling
+- Multi-version package support
+- Publish endpoint with bearer auth
 
-### Added
-
-- `registry/plugin-registry-contract.md` — HTTP API contract for the registry server
-- `registry/plugin-registry-server-plan.md` — implementation plan for the registry server
-- `registry/registry-server-build-guide.md` — build and run guide for the registry server
-- `core/architecture/plans/go-agent-plugin-package-model.md` — plugin package model design
-- `core/examples/build-an-mcp-plugin.md` — MCP plugin authoring example
-- `core/patterns/` — 6 agent design patterns with worked examples:
-  - Single tool agent
-  - Research agent
-  - Research and action pipeline
-  - Orchestrator and sub-agents
-  - Policy and approval patterns
-  - Prompt composition
-
-### Structure established
-
-- Docs separated from code repos into this dedicated repository
-- `core/` — agent framework docs (concepts, guides, examples, patterns, architecture plans)
-- `registry/` — registry server docs
-- `plugins/` — plugin ecosystem overview
-
----
-
-## v0.1.0
-
-Initial documentation set.
-
-### Added
-
-- `core/plugins.md` — plugin system overview
-- `core/profiles.md` — profile configuration reference
-- `core/prompts.md` — prompt system reference
-- `core/policy.md` — policy and approval model
-- `core/mcp-bridge.md` — MCP client bridge guide
-- `core/building-plugins.md` — plugin authoring guide
-- `core/plugin-runtime-choices.md` — choosing a runtime
-- `core/plugin-http-example.md` — HTTP plugin walkthrough
-- `core/plugin-author-checklist.md` — pre-publish checklist
-- `core/examples/build-a-send-email-plugin.md`
-- `core/examples/build-a-web-research-plugin.md`
-- `core/release-checklist-v0.1.md`
-- `core/architecture/plans/go-agent-framework-plan.md`
-- `core/architecture/plans/go-agent-framework-roadmap.md`
-- `core/architecture/plans/go-agent-framework-plugin-spec.md`
-- `core/architecture/plans/go-agent-framework-profiles-and-plugins.md`
-- `core/architecture/plans/go-agent-framework-package-layout.md`
-- `core/architecture/plans/go-agent-framework-cli-surface.md`
-- `core/architecture/plans/go-agent-framework-comparison-and-direction.md`
-- `core/architecture/plans/go-agent-framework-v0.1-feature-list.md`
-- `plugins/overview.md` — plugin package collection overview
+## Agent v0.1.0
+- Core framework release
+- Built-in tools: read, write, edit, bash, glob, grep
+- OpenAI-compatible provider
+- SQLite sessions
+- Plugin system with install/enable/disable
+- Policy and approval gates
+- MCP client bridge

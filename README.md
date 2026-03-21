@@ -1,101 +1,93 @@
-# agent-docs
+# Agent Platform Documentation
 
-Central documentation for the agent framework ecosystem.
+Documentation for the distributed AI agent platform built with Go.
 
-This repo is the single source of truth for all project documentation.
-Code repos contain short READMEs pointing here.
+## Platform components
 
-## Repositories
+| Component | Repo | Image | Description |
+|---|---|---|---|
+| **Agent** | [agent](https://github.com/bitop-dev/agent) | `ghcr.io/bitop-dev/agent` | Framework, CLI, workers |
+| **Gateway** | [agent-gateway](https://github.com/bitop-dev/agent-gateway) | `ghcr.io/bitop-dev/agent-gateway` | Task routing, auth, webhooks, scheduling, dashboard |
+| **Registry** | [agent-registry](https://github.com/bitop-dev/agent-registry) | `ghcr.io/bitop-dev/agent-registry` | Plugin + profile package server |
+| **Plugins** | [agent-plugins](https://github.com/bitop-dev/agent-plugins) | — | 14 plugin packages |
+| **Profiles** | [agent-profiles](https://github.com/bitop-dev/agent-profiles) | — | Agent profile definitions |
+| **Docs** | [agent-docs](https://github.com/bitop-dev/agent-docs) | — | This repository |
 
-| Repo | What it owns |
-|---|---|
-| [`agent`](https://github.com/ncecere/agent) | Core Go framework and CLI runtime |
-| [`agent-plugins`](https://github.com/ncecere/agent-plugins) | Plugin package bundles |
-| [`agent-registry`](https://github.com/ncecere/agent-registry) | Plugin registry HTTP server |
-| [`agent-docs`](https://github.com/ncecere/agent-docs) | All documentation (this repo) |
+## Architecture
 
----
+```
+External clients (API, webhooks, web dashboard, CLI)
+                        │
+                 ┌──────┴──────┐
+                 │   Gateway   │  auth, routing, retries, scheduling, dashboard
+                 └──────┬──────┘
+                        │
+           ┌────────────┼────────────┐
+           │            │            │
+     ┌─────┴────┐ ┌────┴─────┐ ┌────┴─────┐
+     │ Worker 1  │ │ Worker 2  │ │ Worker N  │  on-demand profiles + plugins
+     └─────┬────┘ └────┬─────┘ └────┬─────┘
+           │            │            │
+           └────────────┼────────────┘
+                        │
+           ┌────────────┼────────────┐
+           │            │            │
+     ┌─────┴────┐ ┌────┴─────┐ ┌────┴─────┐
+     │ Registry  │ │ Postgres  │ │   NATS   │
+     │ packages  │ │  state    │ │  events  │
+     └──────────┘ └──────────┘ └──────────┘
+```
 
-## Core Framework (`core/`)
+Workers start blank and pull profiles and plugins from the registry on demand.
+The gateway routes tasks to workers, retries on failures, and stores results
+in PostgreSQL. NATS provides real-time events for the dashboard.
 
-The agent runtime, CLI, plugin system, and configuration.
+## Documentation index
 
-### Concepts
-
-- [plugins.md](core/plugins.md) — Plugin system overview
-- [profiles.md](core/profiles.md) — Profile configuration
-- [prompts.md](core/prompts.md) — Prompt system
-- [policy.md](core/policy.md) — Policy and approval model
-- [mcp-bridge.md](core/mcp-bridge.md) — MCP client bridge
-
-### Building Plugins
-
-- [building-plugins.md](core/building-plugins.md) — Plugin authoring guide
-- [plugin-runtime-choices.md](core/plugin-runtime-choices.md) — Choosing a runtime (http / mcp / command / host)
-- [plugin-http-example.md](core/plugin-http-example.md) — HTTP plugin walkthrough
-- [plugin-author-checklist.md](core/plugin-author-checklist.md) — Pre-publish checklist
-
-### Examples
-
-- [build-a-send-email-plugin.md](core/examples/build-a-send-email-plugin.md)
-- [build-a-web-research-plugin.md](core/examples/build-a-web-research-plugin.md)
-- [build-an-mcp-plugin.md](core/examples/build-an-mcp-plugin.md)
+### Core framework
+- [Profiles](core/profiles.md) — agent definition spec, discovery metadata, MCP server
+- [Plugins](core/plugins.md) — install, upgrade, publish, dependencies, envMapping
+- [Policy](core/policy.md) — approval gates, sensitive actions, overlay rules
+- [Prompts](core/prompts.md) — system instructions, plugin prompt IDs
+- [Building plugins](core/building-plugins.md) — how to create plugins from scratch
 
 ### Patterns
+- [Single-tool agent](core/patterns/01-single-tool-agent.md)
+- [Research agent](core/patterns/02-research-agent.md)
+- [Research + action pipeline](core/patterns/03-research-and-action-pipeline.md)
+- [Orchestrator + sub-agents](core/patterns/04-orchestrator-sub-agents.md) — includes parallel, pipelines, discovery
+- [Policy and approval](core/patterns/05-policy-and-approval-patterns.md)
+- [Prompt composition](core/patterns/06-prompt-composition.md)
 
-- [patterns/README.md](core/patterns/README.md) — Pattern library index
-- [01 Single Tool Agent](core/patterns/01-single-tool-agent.md)
-- [02 Research Agent](core/patterns/02-research-agent.md)
-- [03 Research and Action Pipeline](core/patterns/03-research-and-action-pipeline.md)
-- [04 Orchestrator / Sub-Agents](core/patterns/04-orchestrator-sub-agents.md)
-- [05 Policy and Approval Patterns](core/patterns/05-policy-and-approval-patterns.md)
-- [06 Prompt Composition](core/patterns/06-prompt-composition.md)
+### Gateway
+- [Overview](gateway/overview.md) — tasks, auth, webhooks, scheduling, retries, dashboard
 
-### Architecture Plans
+### Registry
+- [Contract](registry/plugin-registry-contract.md)
+- [Server plan](registry/plugin-registry-server-plan.md)
 
-- [go-agent-framework-plan.md](core/architecture/plans/go-agent-framework-plan.md)
-- [go-agent-framework-roadmap.md](core/architecture/plans/go-agent-framework-roadmap.md)
-- [go-agent-framework-plugin-spec.md](core/architecture/plans/go-agent-framework-plugin-spec.md)
-- [go-agent-framework-profiles-and-plugins.md](core/architecture/plans/go-agent-framework-profiles-and-plugins.md)
-- [go-agent-framework-package-layout.md](core/architecture/plans/go-agent-framework-package-layout.md)
-- [go-agent-framework-cli-surface.md](core/architecture/plans/go-agent-framework-cli-surface.md)
-- [go-agent-framework-comparison-and-direction.md](core/architecture/plans/go-agent-framework-comparison-and-direction.md)
-- [go-agent-framework-v0.1-feature-list.md](core/architecture/plans/go-agent-framework-v0.1-feature-list.md)
-- [go-agent-plugin-package-model.md](core/architecture/plans/go-agent-plugin-package-model.md)
+### Deployment
+- k8s manifests in `agent-deploy/k8s/` (not in this repo — see operator's deployment)
+- Docker images: `ghcr.io/bitop-dev/{agent,agent-gateway,agent-registry}`
 
-### Release
-
-- [release-checklist-v0.1.md](core/release-checklist-v0.1.md)
-
----
-
-## Plugin Registry (`registry/`)
-
-The HTTP registry server that serves plugin packages remotely.
-
-- [plugin-registry-contract.md](registry/plugin-registry-contract.md) — HTTP API contract
-- [plugin-registry-server-plan.md](registry/plugin-registry-server-plan.md) — Implementation plan
-- [registry-server-build-guide.md](registry/registry-server-build-guide.md) — Build and run guide
-
----
-
-## Plugin Packages (`plugins/`)
-
-The plugin bundle ecosystem and package conventions.
-
-- [overview.md](plugins/overview.md) — Plugin packages overview and layout
-
----
-
-## Quick Start
+## Quick start
 
 ```bash
-# Run the agent
-go run ./cmd/agent --profile ./profiles/my-profile.yaml
+# Local development
+go run ./cmd/agent run --profile researcher "Research AI news"
 
-# Start the registry server (from agent-registry/)
-go run ./cmd/registry-server --plugin-root ../agent-plugins --addr 127.0.0.1:9080
+# HTTP worker
+agent serve --addr :9898
 
-# Search plugins
-agent plugins search email
+# MCP server (for opencode/Claude Desktop)
+agent serve --profile researcher
+
+# Submit via gateway
+curl -X POST http://gateway:8080/v1/tasks \
+  -H "Authorization: Bearer <key>" \
+  -d '{"profile":"researcher","task":"Top AI story today"}'
+
+# Parallel tasks via gateway
+curl -X POST http://gateway:8080/v1/tasks/parallel \
+  -d '{"tasks":[{"profile":"researcher","task":"Anthropic news"},{"profile":"researcher","task":"OpenAI news"}]}'
 ```
